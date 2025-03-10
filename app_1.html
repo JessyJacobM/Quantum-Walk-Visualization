@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Walk Simulation</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+        }
+        #output {
+            margin-top: 20px;
+        }
+        #plot {
+            margin-top: 20px;
+            max-width: 90%;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Quantum Walk on a Path Graph P3</h1>
+    <p>Click the button to run the Quantum Walk Simulation.</p>
+
+    <button onclick="runPython()">Run Simulation</button>
+
+    <p><strong>Output:</strong></p>
+    <div id="output">Output will appear here...</div>
+    <img id="plot" src="" alt="Quantum Walk Plot" style="display: none;">
+
+    <script>
+        async function runPython() {
+            let outputElement = document.getElementById("output");
+            let plotElement = document.getElementById("plot");
+
+            outputElement.innerHTML = "Running simulation... Please wait.";
+            plotElement.style.display = "none";
+
+            if (!window.pyodide) {
+                window.pyodide = await loadPyodide();
+            }
+
+            await pyodide.loadPackage(["numpy", "matplotlib", "scipy"]);
+
+            let pythonCode = `
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.linalg
+import io
+import base64
+
+# Define adjacency matrix for a path graph P3
+A = np.array([[0, 1],
+              [1, 0]])
+
+# Quantum walk time evolution function
+def quantum_walk(A, t):
+    return scipy.linalg.expm(-1j * A * t)
+
+# Initial state: Walker starts at node 0
+psi_0 = np.array([1, 0])  
+
+# Time steps
+time_values = np.linspace(0, 10, 200)
+probabilities = np.zeros((len(time_values), len(A)))
+
+# Simulate quantum walk
+for i, t in enumerate(time_values):
+    U_t = quantum_walk(A, t)
+    psi_t = U_t @ psi_0
+    probabilities[i] = np.abs(psi_t) ** 2  
+
+# Plot probability distribution
+fig, ax = plt.subplots(figsize=(8, 5))
+for node in range(len(A)):
+    ax.plot(time_values, probabilities[:, node], label=f'Node {node}')
+
+ax.set_xlabel('Time (t)')
+ax.set_ylabel('Probability')
+ax.set_title('Quantum Walk on a Path Graph P3')
+ax.legend()
+ax.grid()
+
+# Save plot to a buffer
+buf = io.BytesIO()
+plt.savefig(buf, format='png')
+buf.seek(0)
+img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+img_data = f"data:image/png;base64,{img_base64}"
+img_data
+`;
+
+            try {
+                let result = await pyodide.runPythonAsync(pythonCode);
+                plotElement.src = result;
+                plotElement.style.display = "block";
+                outputElement.innerHTML = "Simulation completed! ✅";
+            } catch (error) {
+                outputElement.innerHTML = "Error: " + error;
+            }
+        }
+    </script>
+
+</body>
+</html>
