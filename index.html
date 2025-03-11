@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantum Walk Simulation</title>
+    <title>Interactive Quantum Walk Graph</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
     <style>
         body {
@@ -11,20 +11,53 @@
             text-align: center;
             margin: 20px;
         }
-        input {
-            padding: 8px;
-            margin: 5px;
-            font-size: 16px;
-            width: 100px;
+        #graph {
+            width: 600px;
+            height: 600px;
+            margin: 20px auto;
+            border: 1px solid #ccc;
+            position: relative;
+            cursor: pointer;
         }
-        button {
+        button, input {
             padding: 10px;
             font-size: 16px;
             margin: 10px;
             cursor: pointer;
         }
-        #output {
+        #adj-matrix table {
+            width: 100%;
             margin-top: 20px;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: center;
+        }
+        .node {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 25px;
+            font-size: 14px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            background-color: lightblue;
+        }
+        .start-node {
+            background-color: red;
+        }
+        .edge {
+            position: absolute;
+            height: 2px;
+            background-color: black;
+            transform-origin: 0% 50%;
+            z-index: -1;
         }
         #plot {
             margin-top: 20px;
@@ -34,102 +67,126 @@
     </style>
 </head>
 <body>
-
-    <h1>Quantum Walk on a Path Graph P3</h1>
-    <p>Enter simulation parameters and click "Run Simulation".</p>
-
-    <label for="time">Time Duration (T):</label>
-    <input type="number" id="time" value="10">
-    
-    <label for="steps">Number of Steps (N):</label>
-    <input type="number" id="steps" value="200">
-
-    <br><br>
-    <button onclick="runPython()">Run Simulation</button>
-
-    <p><strong>Output:</strong></p>
-    <div id="output">Output will appear here...</div>
+    <h1>Interactive Quantum Walk Graph</h1>
+    <button onclick="enableAddNode()">Add Node</button>
+    <button onclick="enableAddEdge()">Add Edge</button>
+    <button onclick="enableSetStartNode()">Set Start Node</button>
+    <button onclick="generateAdjMatrix()">Generate Adjacency Matrix</button>
+    <button onclick="runQuantumWalk()">Run Quantum Walk</button>
+    <div id="graph"></div>
+    <div id="adj-matrix"></div>
     <img id="plot" src="" alt="Quantum Walk Plot">
-
     <script>
-        async function runPython() {
-            let outputElement = document.getElementById("output");
-            let plotElement = document.getElementById("plot");
+        let nodes = [];
+        let edges = [];
+        let startNode = 0;
+        let selectedNodes = [];
+        let mode = null;
 
-            // Get user inputs
-            let T = document.getElementById("time").value;
-            let N = document.getElementById("steps").value;
-
-            outputElement.innerHTML = "Running simulation... Please wait.";
-            plotElement.style.display = "none";
-
-            if (!window.pyodide) {
-                window.pyodide = await loadPyodide();
+        function enableAddNode() {
+            mode = 'addNode';
+        }
+        function enableAddEdge() {
+            mode = 'addEdge';
+            selectedNodes = [];
+        }
+        function enableSetStartNode() {
+            mode = 'setStartNode';
+        }
+        function generateAdjMatrix() {
+            let nodeCount = nodes.length;
+            let adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
+            edges.forEach(([node1, node2]) => {
+                adjMatrix[node1][node2] = 1;
+                adjMatrix[node2][node1] = 1;
+            });
+            document.getElementById("adj-matrix").innerHTML = JSON.stringify(adjMatrix);
+            return adjMatrix;
+        }
+        function renderGraph() {
+            const graph = document.getElementById("graph");
+            graph.innerHTML = "";
+            edges.forEach(([node1, node2]) => {
+                const nodeA = nodes[node1];
+                const nodeB = nodes[node2];
+                const edgeElement = document.createElement("div");
+                edgeElement.classList.add("edge");
+                const dx = nodeB.x - nodeA.x;
+                const dy = nodeB.y - nodeA.y;
+                const length = Math.sqrt(dx * dx + dy * dy);
+                edgeElement.style.width = `${length}px`;
+                edgeElement.style.left = `${nodeA.x + 25}px`;
+                edgeElement.style.top = `${nodeA.y + 25}px`;
+                edgeElement.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+                graph.appendChild(edgeElement);
+            });
+            nodes.forEach((node, idx) => {
+                const nodeElement = document.createElement("div");
+                nodeElement.classList.add("node");
+                nodeElement.innerText = `Node ${node.id}`;
+                nodeElement.style.left = `${node.x}px`;
+                nodeElement.style.top = `${node.y}px`;
+                if (startNode === node.id) nodeElement.classList.add("start-node");
+                nodeElement.onclick = () => nodeClicked(node.id);
+                graph.appendChild(nodeElement);
+            });
+        }
+        function nodeClicked(nodeId) {
+            if (mode === 'addEdge') {
+                if (selectedNodes.length < 2) {
+                    selectedNodes.push(nodeId);
+                    if (selectedNodes.length === 2) {
+                        edges.push([...selectedNodes]);
+                        renderGraph();
+                    }
+                }
+            } else if (mode === 'setStartNode') {
+                startNode = nodeId;
+                renderGraph();
             }
-
+        }
+        async function runQuantumWalk() {
+            let adjMatrix = generateAdjMatrix();
+            if (!window.pyodide) window.pyodide = await loadPyodide();
             await pyodide.loadPackage(["numpy", "matplotlib", "scipy"]);
-
             let pythonCode = `
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.linalg
-import io
-import base64
-
-# Define adjacency matrix for a path graph P3
-A = np.array([[0, 1], [1, 0]])
-
-# Quantum walk time evolution function
-def quantum_walk(A, t):
-    return scipy.linalg.expm(-1j * A * t)
-
-# Initial state: Walker starts at node 0
-psi_0 = np.array([1, 0])  
-
-# User-defined parameters
-T = float(${T})  # Convert user input to float
-N = int(${N})  # Convert user input to integer
-
-# Time steps
+import io, base64
+A = np.array(${JSON.stringify(adjMatrix)})
+psi_0 = np.zeros(len(A))
+psi_0[${startNode}] = 1
+T, N = 10, 200
 time_values = np.linspace(0, T, N)
 probabilities = np.zeros((len(time_values), len(A)))
-
-# Simulate quantum walk
 for i, t in enumerate(time_values):
-    U_t = quantum_walk(A, t)
+    U_t = scipy.linalg.expm(-1j * A * t)
     psi_t = U_t @ psi_0
-    probabilities[i] = np.abs(psi_t) ** 2  
-
-# Plot probability distribution
+    probabilities[i] = np.abs(psi_t) ** 2
 fig, ax = plt.subplots(figsize=(8, 5))
 for node in range(len(A)):
     ax.plot(time_values, probabilities[:, node], label=f'Node {node}')
-
-ax.set_xlabel('Time (t)')
+ax.set_xlabel('Time')
 ax.set_ylabel('Probability')
-ax.set_title('Quantum Walk on a Path Graph P3')
 ax.legend()
 ax.grid()
-
-# Save plot to a buffer
 buf = io.BytesIO()
 plt.savefig(buf, format='png')
 buf.seek(0)
 img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-img_data = f"data:image/png;base64,{img_base64}"
-img_data
-`;
-
-            try {
-                let result = await pyodide.runPythonAsync(pythonCode);
-                plotElement.src = result;
-                plotElement.style.display = "block";
-                outputElement.innerHTML = "Simulation completed! ✅";
-            } catch (error) {
-                outputElement.innerHTML = "Error: " + error;
-            }
+"data:image/png;base64," + img_base64`;
+            let result = await pyodide.runPythonAsync(pythonCode);
+            document.getElementById("plot").src = result;
+            document.getElementById("plot").style.display = "block";
         }
+        document.getElementById("graph").addEventListener("click", function(event) {
+            if (mode === 'addNode') {
+                const graphRect = event.target.getBoundingClientRect();
+                nodes.push({ id: nodes.length, x: event.clientX - graphRect.left - 25, y: event.clientY - graphRect.top - 25 });
+                renderGraph();
+            }
+        });
     </script>
-
 </body>
 </html>
