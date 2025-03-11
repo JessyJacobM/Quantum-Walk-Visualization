@@ -123,7 +123,7 @@
             nodes.forEach((node, idx) => {
                 const nodeElement = document.createElement("div");
                 nodeElement.classList.add("node");
-                nodeElement.innerText = `Node ${node.id}`;
+                nodeElement.innerText = `${node.id}`;
                 nodeElement.style.left = `${node.x}px`;
                 nodeElement.style.top = `${node.y}px`;
                 if (startNode === node.id) nodeElement.classList.add("start-node");
