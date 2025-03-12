@@ -54,10 +54,11 @@
         }
         .edge {
             position: absolute;
-            height: 2px;
+            height: 5px;
             background-color: black;
             transform-origin: 0% 50%;
             z-index: -1;
+            cursor: pointer;
         }
         #plot {
             margin-top: 20px;
@@ -71,6 +72,7 @@
     <button onclick="enableAddNode()">Add Node</button>
     <button onclick="enableAddEdge()">Add Edge</button>
     <button onclick="enableSetStartNode()">Set Start Node</button>
+    <button onclick="enableDeleteNode()">Delete Node/Edge</button>
     <button onclick="generateAdjMatrix()">Generate Adjacency Matrix</button>
     <button onclick="runQuantumWalk()">Run Quantum Walk</button>
     <div id="graph"></div>
@@ -93,6 +95,10 @@
         function enableSetStartNode() {
             mode = 'setStartNode';
         }
+        function enableDeleteNode() {
+            mode = 'delete';
+        }
+
         function generateAdjMatrix() {
             let nodeCount = nodes.length;
             let adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
@@ -106,31 +112,50 @@
         function renderGraph() {
             const graph = document.getElementById("graph");
             graph.innerHTML = "";
-            edges.forEach(([node1, node2]) => {
-                const nodeA = nodes[node1];
-                const nodeB = nodes[node2];
+            
+            edges.forEach(([node1, node2], index) => {
+                const nodeA = nodes.find(n => n.id === node1);
+                const nodeB = nodes.find(n => n.id === node2);
+
+                if (!nodeA || !nodeB) return;  
+
                 const edgeElement = document.createElement("div");
                 edgeElement.classList.add("edge");
+                edgeElement.dataset.index = index;
+
                 const dx = nodeB.x - nodeA.x;
                 const dy = nodeB.y - nodeA.y;
                 const length = Math.sqrt(dx * dx + dy * dy);
+
                 edgeElement.style.width = `${length}px`;
                 edgeElement.style.left = `${nodeA.x + 25}px`;
                 edgeElement.style.top = `${nodeA.y + 25}px`;
                 edgeElement.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+                edgeElement.style.position = "absolute";
+                edgeElement.style.zIndex = "0";  
+                edgeElement.style.backgroundColor = "black";
+                edgeElement.style.cursor = "pointer";
+
+                edgeElement.onclick = () => deleteEdge(index);
                 graph.appendChild(edgeElement);
             });
-            nodes.forEach((node, idx) => {
+
+            nodes.forEach((node) => {
                 const nodeElement = document.createElement("div");
                 nodeElement.classList.add("node");
                 nodeElement.innerText = `${node.id}`;
                 nodeElement.style.left = `${node.x}px`;
                 nodeElement.style.top = `${node.y}px`;
+                nodeElement.style.position = "absolute";
+                nodeElement.style.zIndex = "1";
+
                 if (startNode === node.id) nodeElement.classList.add("start-node");
                 nodeElement.onclick = () => nodeClicked(node.id);
+
                 graph.appendChild(nodeElement);
             });
         }
+
         function nodeClicked(nodeId) {
             if (mode === 'addEdge') {
                 if (selectedNodes.length < 2) {
@@ -143,8 +168,21 @@
             } else if (mode === 'setStartNode') {
                 startNode = nodeId;
                 renderGraph();
+            } else if (mode === 'delete') {
+                deleteNode(nodeId);
             }
         }
+        function deleteNode(nodeId){
+            edges = edges.filter(edge => !edge.includes(nodeId));
+            nodes = nodes.filter(node => node.id !== nodeId);
+            renderGraph();
+        }
+        function deleteEdge(edgeIndex){
+            if (true){
+                edges.splice(edgeIndex,1);
+                renderGraph();
+            }
+        } 
         async function runQuantumWalk() {
             let adjMatrix = generateAdjMatrix();
             if (!window.pyodide) window.pyodide = await loadPyodide();
