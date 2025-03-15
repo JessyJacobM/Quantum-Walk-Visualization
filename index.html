@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Quantum Walk Graph</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,18 +23,8 @@
         button, input {
             padding: 10px;
             font-size: 16px;
-            margin: 10px;
+            margin: 5px;
             cursor: pointer;
-        }
-        #adj-matrix table {
-            width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
-        }
-        th, td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: center;
         }
         .node {
             position: absolute;
@@ -42,15 +33,14 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border-radius: 25px;
+            border-radius: 50%;
             font-size: 14px;
             color: white;
             font-weight: bold;
             cursor: pointer;
-            background-color: lightblue;
         }
         .start-node {
-            background-color: red;
+            border: 5px solid black; 
         }
         .edge {
             position: absolute;
@@ -59,11 +49,6 @@
             transform-origin: 0% 50%;
             z-index: -1;
             cursor: pointer;
-        }
-        #plot {
-            margin-top: 20px;
-            max-width: 90%;
-            display: none;
         }
     </style>
 </head>
@@ -75,49 +60,48 @@
     <button onclick="enableDeleteNode()">Delete Node/Edge</button>
     <button onclick="generateAdjMatrix()">Generate Adjacency Matrix</button>
     <button onclick="runQuantumWalk()">Run Quantum Walk</button>
+    <button onclick="stopQuantumWalk()">Stop Run</button>
+    <button onclick="resetGraph()">Reset Graph</button>
+    
     <div id="graph"></div>
     <div id="adj-matrix"></div>
-    <img id="plot" src="" alt="Quantum Walk Plot">
+
     <script>
         let nodes = [];
         let edges = [];
         let startNode = 0;
         let selectedNodes = [];
         let mode = null;
+        let running = false;
+        let step = 0;
+        let timeStep = 0;
+        let adjMatrix = [];
+        const colorScale = d3.scaleSequential(d3.interpolateRgb('blue', 'red')).domain([0, 1]);
 
-        function enableAddNode() {
-            mode = 'addNode';
-        }
-        function enableAddEdge() {
-            mode = 'addEdge';
-            selectedNodes = [];
-        }
-        function enableSetStartNode() {
-            mode = 'setStartNode';
-        }
-        function enableDeleteNode() {
-            mode = 'delete';
-        }
-
+        function enableAddNode() { mode = 'addNode'; }
+        function enableAddEdge() { mode = 'addEdge'; selectedNodes = []; }
+        function enableSetStartNode() { mode = 'setStartNode'; }
+        function enableDeleteNode() { mode = 'delete'; }
+        
         function generateAdjMatrix() {
             let nodeCount = nodes.length;
-            let adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
+            adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
             edges.forEach(([node1, node2]) => {
                 adjMatrix[node1][node2] = 1;
                 adjMatrix[node2][node1] = 1;
             });
-            document.getElementById("adj-matrix").innerHTML = JSON.stringify(adjMatrix);
+            document.getElementById("adj-matrix").innerText = JSON.stringify(adjMatrix);
             return adjMatrix;
         }
-        function renderGraph() {
+
+        function renderGraph(probabilities = null) {
             const graph = document.getElementById("graph");
             graph.innerHTML = "";
-            
+
             edges.forEach(([node1, node2], index) => {
                 const nodeA = nodes.find(n => n.id === node1);
                 const nodeB = nodes.find(n => n.id === node2);
-
-                if (!nodeA || !nodeB) return;  
+                if (!nodeA || !nodeB) return;
 
                 const edgeElement = document.createElement("div");
                 edgeElement.classList.add("edge");
@@ -135,33 +119,51 @@
                 edgeElement.style.zIndex = "0";  
                 edgeElement.style.backgroundColor = "black";
                 edgeElement.style.cursor = "pointer";
-
-                edgeElement.onclick = () => deleteEdge(index);
+                
+                edgeElement.onclick = () => confirm("Delete this edge?") && deleteEdge(index);
                 graph.appendChild(edgeElement);
             });
 
             nodes.forEach((node) => {
                 const nodeElement = document.createElement("div");
                 nodeElement.classList.add("node");
-                nodeElement.innerText = `${node.id}`;
                 nodeElement.style.left = `${node.x}px`;
                 nodeElement.style.top = `${node.y}px`;
                 nodeElement.style.position = "absolute";
                 nodeElement.style.zIndex = "1";
 
+                let prob = probabilities ? probabilities[node.id] : 0;
+                nodeElement.innerHTML = `${node.id}|${prob.toFixed(2)}`;
+                nodeElement.style.backgroundColor = colorScale(prob);
+
                 if (startNode === node.id) nodeElement.classList.add("start-node");
                 nodeElement.onclick = () => nodeClicked(node.id);
-
                 graph.appendChild(nodeElement);
             });
+            
+            let timeLabel = document.getElementById("time-label");
+            if (!timeLabel) {
+                timeLabel = document.createElement("div");
+                timeLabel.id = "time-label";
+                timeLabel.style.position = "absolute";
+                timeLabel.style.top = "10px";
+                timeLabel.style.left = "50%";
+                timeLabel.style.transform = "translateX(-50%)";
+                timeLabel.style.fontSize = "18px";
+                timeLabel.style.fontWeight = "bold";
+                graph.appendChild(timeLabel);
+            }
+            timeLabel.innerText = `Time: ${timeStep.toFixed(1)}`;
         }
 
         function nodeClicked(nodeId) {
             if (mode === 'addEdge') {
-                if (selectedNodes.length < 2) {
+                if (selectedNodes.length < 2 && !selectedNodes.includes(nodeId)) {
                     selectedNodes.push(nodeId);
                     if (selectedNodes.length === 2) {
-                        edges.push([...selectedNodes]);
+                        if (!edges.some(e => e.includes(selectedNodes[0]) && e.includes(selectedNodes[1]))) {
+                            edges.push([...selectedNodes]);
+                        }
                         renderGraph();
                     }
                 }
@@ -172,55 +174,63 @@
                 deleteNode(nodeId);
             }
         }
-        function deleteNode(nodeId){
+
+        function deleteNode(nodeId) {
             edges = edges.filter(edge => !edge.includes(nodeId));
             nodes = nodes.filter(node => node.id !== nodeId);
             renderGraph();
         }
-        function deleteEdge(edgeIndex){
-            if (true){
-                edges.splice(edgeIndex,1);
-                renderGraph();
-            }
-        } 
-        async function runQuantumWalk() {
-            let adjMatrix = generateAdjMatrix();
-            if (!window.pyodide) window.pyodide = await loadPyodide();
-            await pyodide.loadPackage(["numpy", "matplotlib", "scipy"]);
-            let pythonCode = `
-import numpy as np
-import matplotlib.pyplot as plt
-import scipy.linalg
-import io, base64
-A = np.array(${JSON.stringify(adjMatrix)})
-psi_0 = np.zeros(len(A))
-psi_0[${startNode}] = 1
-T, N = 10, 200
-time_values = np.linspace(0, T, N)
-probabilities = np.zeros((len(time_values), len(A)))
-for i, t in enumerate(time_values):
-    U_t = scipy.linalg.expm(-1j * A * t)
-    psi_t = U_t @ psi_0
-    probabilities[i] = np.abs(psi_t) ** 2
-fig, ax = plt.subplots(figsize=(8, 5))
-for node in range(len(A)):
-    ax.plot(time_values, probabilities[:, node], label=f'Node {node}')
-ax.set_xlabel('Time')
-ax.set_ylabel('Probability')
-ax.legend()
-ax.grid()
-buf = io.BytesIO()
-plt.savefig(buf, format='png')
-buf.seek(0)
-img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-"data:image/png;base64," + img_base64`;
-            let result = await pyodide.runPythonAsync(pythonCode);
-            document.getElementById("plot").src = result;
-            document.getElementById("plot").style.display = "block";
+
+        function deleteEdge(edgeIndex) {
+            edges.splice(edgeIndex, 1);
+            renderGraph();
         }
+
+        async function runQuantumWalk() {
+            adjMatrix = generateAdjMatrix();
+            if (!window.pyodide) window.pyodide = await loadPyodide();
+            await pyodide.loadPackage(["numpy", "scipy"]);
+            running = true;
+            step = 0;
+
+            async function computeAndAnimate() {
+                if (!running) return;
+                timeStep = step * 0.1;
+                let pythonCode = `
+import numpy as np, scipy.linalg, json
+A = np.array(${JSON.stringify(adjMatrix)})
+psi_0 = np.zeros(len(A)); psi_0[${startNode}] = 1
+U_t = scipy.linalg.expm(-1j * A * ${timeStep})
+psi_t = U_t @ psi_0
+json.dumps(list(map(float, np.abs(psi_t) ** 2)))`;
+
+                try {
+                    let result = await pyodide.runPythonAsync(pythonCode);
+                    let probabilities = JSON.parse(result);
+                    renderGraph(probabilities);
+                    step++;
+                    setTimeout(computeAndAnimate, 100);
+                } catch (error) {
+                    console.error("Python execution error:", error);
+                }
+            }
+            computeAndAnimate();
+        }
+
+        function stopQuantumWalk() { running = false; }
+
+        function resetGraph() {
+            nodes = [];
+            edges = [];
+            startNode = 0;
+            running = false;
+            timeStep = 0;
+            renderGraph();
+        }
+
         document.getElementById("graph").addEventListener("click", function(event) {
             if (mode === 'addNode') {
-                const graphRect = event.target.getBoundingClientRect();
+                const graphRect = document.getElementById("graph").getBoundingClientRect();
                 nodes.push({ id: nodes.length, x: event.clientX - graphRect.left - 25, y: event.clientY - graphRect.top - 25 });
                 renderGraph();
             }
