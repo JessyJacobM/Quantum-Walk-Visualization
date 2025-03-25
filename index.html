@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Quantum Walk Graph</title>
+    <title>Graphical Quantum Walk Visualization</title>
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
@@ -35,9 +35,10 @@
             justify-content: center;
             border-radius: 50%;
             font-size: 14px;
-            color: white;
+            color: black;
             font-weight: bold;
             cursor: pointer;
+            border: 1px solid black;
         }
         .start-node {
             border: 5px solid black; 
@@ -50,19 +51,67 @@
             z-index: -1;
             cursor: pointer;
         }
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 45px;
+            height: 30px;
+            margin: -2px;
+            margin-top: 2px;
+        }
+        .switch input {
+            display: none;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 6px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #4CAF50; 
+        }
+        input:checked + .slider:before {
+            transform: translateX(18px);
+        }
+        label{
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
-    <h1>Interactive Quantum Walk Graph</h1>
-    <button onclick="enableAddNode()">Add Node</button>
-    <button onclick="enableAddEdge()">Add Edge</button>
-    <button onclick="enableSetStartNode()">Set Start Node</button>
-    <button onclick="enableDeleteNode()">Delete Node/Edge</button>
-    <button onclick="generateAdjMatrix()">Generate Adjacency Matrix</button>
-    <button onclick="runQuantumWalk()">Run Quantum Walk</button>
-    <button onclick="stopQuantumWalk()">Stop Run</button>
-    <button onclick="resetGraph()">Reset Graph</button>
-    
+    <h1>Graphical Quantum Walk Visualization</h1>
+    <button title = "Click here, then click on the canvas to start adding nodes" onclick="enableAddNode()">Add Node</button>
+    <button title = "Click here, then click on the two nodes you want to add the edge between" onclick="enableAddEdge()">Add Edge</button>
+    <button title = "Click here, then click on the node you want to set as start node" onclick="enableSetStartNode()">Set Start Node</button>
+    <button title = "Click here, then select the node/edge you want to delete" onclick="enableDeleteNode()">Delete Node/Edge</button>
+    <button title = "Click here to generate Adjacency Matrix for the graph created" onclick="generateAdjMatrix()">Generate Adjacency Matrix</button>
+    <button title = "Click here to start the Quantum Walk Simulation" onclick="runQuantumWalk()">Run Quantum Walk</button>
+    <button title = "Click to stop the Simulation" onclick="stopQuantumWalk()">Stop Run</button>
+    <button title = "Click here to reset the graph" onclick="resetGraph()">Reset Graph</button>
+
+    <div>
+        <span>Unweighted</span>
+        <label class="switch">
+          <input type="checkbox" id="weightToggle">
+          <span class="slider round"></span>
+        </label>
+        <span>Weighted</span>
+      </div>
+      
     <div id="graph"></div>
     <div id="adj-matrix"></div>
 
@@ -76,7 +125,7 @@
         let step = 0;
         let timeStep = 0;
         let adjMatrix = [];
-        const colorScale = d3.scaleSequential(d3.interpolateRgb('blue', 'red')).domain([0, 1]);
+        const colorScale = d3.scaleSequential(d3.interpolateRgb('white', 'green')).domain([0, 1]);
 
         function enableAddNode() { mode = 'addNode'; }
         function enableAddEdge() { mode = 'addEdge'; selectedNodes = []; }
@@ -85,10 +134,11 @@
         
         function generateAdjMatrix() {
             let nodeCount = nodes.length;
-            adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
-            edges.forEach(([node1, node2]) => {
-                adjMatrix[node1][node2] = 1;
-                adjMatrix[node2][node1] = 1;
+            adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(Infinity));
+            edges.forEach(edge => {
+                const [node1, node2, weight] =edge;
+                adjMatrix[node1][node2] = weight;
+                adjMatrix[node2][node1] = weight;
             });
             document.getElementById("adj-matrix").innerText = JSON.stringify(adjMatrix);
             return adjMatrix;
@@ -98,28 +148,54 @@
             const graph = document.getElementById("graph");
             graph.innerHTML = "";
 
-            edges.forEach(([node1, node2], index) => {
+            edges.forEach(([node1, node2,weight], index) => {
                 const nodeA = nodes.find(n => n.id === node1);
                 const nodeB = nodes.find(n => n.id === node2);
                 if (!nodeA || !nodeB) return;
-
+                const label = document.createElement("div");
                 const edgeElement = document.createElement("div");
                 edgeElement.classList.add("edge");
                 edgeElement.dataset.index = index;
 
-                const dx = nodeB.x - nodeA.x;
-                const dy = nodeB.y - nodeA.y;
-                const length = Math.sqrt(dx * dx + dy * dy);
-
-                edgeElement.style.width = `${length}px`;
-                edgeElement.style.left = `${nodeA.x + 25}px`;
-                edgeElement.style.top = `${nodeA.y + 25}px`;
-                edgeElement.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
-                edgeElement.style.position = "absolute";
-                edgeElement.style.zIndex = "0";  
-                edgeElement.style.backgroundColor = "black";
-                edgeElement.style.cursor = "pointer";
-                
+                if (node1 === node2){
+                    const loopSize = 40;
+                    edgeElement.style.width = `${loopSize}px`;
+                    edgeElement.style.height = `${loopSize}px`;
+                    edgeElement.style.border = '2px solid black';
+                    edgeElement.style.borderRadius = "50%";
+                    edgeElement.style.position = "absolute";
+                    edgeElement.style.zIndex = "0";  
+                    edgeElement.style.backgroundColor = "white";
+                    edgeElement.style.cursor = "pointer";
+                    edgeElement.style.left = `${nodeA.x - 15}px`;
+                    edgeElement.style.top = `${nodeA.y - 25}px`;
+                    label.style.position = 'absolute';
+                    label.style.left = `${nodeA.x-18}px`;
+                    label.style.top = `${nodeA.y - 28}px`;
+                    label.style.fontSize = "14px";
+                    label.style.color = "black";
+                    label.textContent = `${weight}`;
+                    graph.appendChild(label);
+                } else{
+                    const dx = nodeB.x - nodeA.x;
+                    const dy = nodeB.y - nodeA.y;
+                    const length = Math.sqrt(dx * dx + dy * dy);
+                    edgeElement.style.width = `${length}px`;
+                    edgeElement.style.left = `${nodeA.x + 25}px`;
+                    edgeElement.style.top = `${nodeA.y + 25}px`;
+                    edgeElement.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+                    edgeElement.style.position = "absolute";
+                    edgeElement.style.zIndex = "0";  
+                    edgeElement.style.backgroundColor = "black";
+                    edgeElement.style.cursor = "pointer";
+                    label.style.position = 'absolute';
+                    label.style.left = `${(nodeA.x + nodeB.x) / 2}px`;
+                    label.style.top = `${(nodeA.y + nodeB.y) / 2}px`;
+                    label.style.fontSize = "14px";
+                    label.style.color = "black";
+                    label.textContent = `${weight}`;
+                    graph.appendChild(label);
+                }                
                 edgeElement.onclick = () => confirm("Delete this edge?") && deleteEdge(index);
                 graph.appendChild(edgeElement);
             });
@@ -133,7 +209,7 @@
                 nodeElement.style.zIndex = "1";
 
                 let prob = probabilities ? probabilities[node.id] : 0;
-                nodeElement.innerHTML = `${node.id}|${prob.toFixed(2)}`;
+                nodeElement.innerHTML = `${node.id}|    ${prob.toFixed(2)}`;
                 nodeElement.style.backgroundColor = colorScale(prob);
 
                 if (startNode === node.id) nodeElement.classList.add("start-node");
@@ -158,11 +234,14 @@
 
         function nodeClicked(nodeId) {
             if (mode === 'addEdge') {
-                if (selectedNodes.length < 2 && !selectedNodes.includes(nodeId)) {
+                if (selectedNodes.length < 2 ) {
                     selectedNodes.push(nodeId);
                     if (selectedNodes.length === 2) {
-                        if (!edges.some(e => e.includes(selectedNodes[0]) && e.includes(selectedNodes[1]))) {
-                            edges.push([...selectedNodes]);
+                        const weighted = document.getElementById("weightToggle").checked;
+                        const weight = weighted ? parseFloat(prompt("Enter edge weight:", "1")) : 1;
+
+                        if (!isNaN(weight) && !edges.some(e => e[0] === selectedNodes[0] && e[1] === selectedNodes[1])) {
+                            edges.push([...selectedNodes, weight]);
                         }
                         renderGraph();
                     }
@@ -200,10 +279,9 @@
 import numpy as np, scipy.linalg, json
 A = np.array(${JSON.stringify(adjMatrix)})
 psi_0 = np.zeros(len(A)); psi_0[${startNode}] = 1
-U_t = scipy.linalg.expm(-1j * A * ${timeStep})
+U_t = scipy.linalg.expm(1j * A * ${timeStep})
 psi_t = U_t @ psi_0
 json.dumps(list(map(float, np.abs(psi_t) ** 2)))`;
-
                 try {
                     let result = await pyodide.runPythonAsync(pythonCode);
                     let probabilities = JSON.parse(result);
@@ -217,7 +295,9 @@ json.dumps(list(map(float, np.abs(psi_t) ** 2)))`;
             computeAndAnimate();
         }
 
-        function stopQuantumWalk() { running = false; }
+        function stopQuantumWalk() { 
+            running = false; 
+        }
 
         function resetGraph() {
             nodes = [];
