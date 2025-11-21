@@ -134,7 +134,7 @@
         
         function generateAdjMatrix() {
             let nodeCount = nodes.length;
-            adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(Infinity));
+            adjMatrix = Array.from({ length: nodeCount }, () => Array(nodeCount).fill(0));
             edges.forEach(edge => {
                 const [node1, node2, weight] =edge;
                 adjMatrix[node1][node2] = weight;
@@ -318,4 +318,5 @@ json.dumps(list(map(float, np.abs(psi_t) ** 2)))`;
     </script>
 </body>
 </html>
+
 
