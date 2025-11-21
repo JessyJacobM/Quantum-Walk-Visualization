@@ -138,7 +138,7 @@
             edges.forEach(edge => {
                 const [node1, node2, weight] =edge;
                 adjMatrix[node1][node2] = weight;
-                adjMatrix[node2][node1] = weight;
+                //adjMatrix[node2][node1] = weight;
             });
             document.getElementById("adj-matrix").innerText = JSON.stringify(adjMatrix);
             return adjMatrix;
@@ -318,3 +318,4 @@ json.dumps(list(map(float, np.abs(psi_t) ** 2)))`;
     </script>
 </body>
 </html>
+
