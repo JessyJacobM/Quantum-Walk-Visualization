@@ -492,9 +492,9 @@ Z0 = get_gate_at_pos(Z, 0, 4)
 X0 = get_gate_at_pos(X, 0, 4)
 Y0 = get_gate_at_pos(Y, 0, 4)
 
-term1 = Y0 @ get_hop(1, 2)
-term2 = Z0 @ get_hop(2, 3)
-term3 = X0 @ get_hop(1, 3)
+term1 = Z0 @ get_hop(1, 2)
+term2 = X0 @ get_hop(2, 3)
+term3 = Y0 @ get_hop(1, 3)
 H = term1 + term2 + term3 
 
 state = np.zeros(16, dtype=complex)
@@ -597,3 +597,4 @@ json.dumps(probs.tolist())
     </script>
 </body>
 </html>
+
